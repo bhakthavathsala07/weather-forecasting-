@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Forecasting</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom animations and gradients */
+        .glass-panel {
+            /* Darker background for high contrast with white text */
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            /* Subtle border */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            /* Deep shadow */
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        
+        .weather-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: background 1s ease;
+        }
+
+        /* Deeper colors for better contrast */
+        .weather-sunny { background: linear-gradient(135deg, #2980B9 0%, #6DD5FA 100%); }
+        .weather-cloudy { background: linear-gradient(135deg, #2C3E50 0%, #4CA1AF 100%); }
+        .weather-rainy { background: linear-gradient(135deg, #141E30 0%, #243B55 100%); }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .floating-icon {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .loader {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #ffffff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="weather-gradient min-h-screen text-white font-sans flex items-center justify-center p-4 transition-all duration-700" id="body-bg">
+
+    <div class="w-full max-w-lg">
+        <!-- Search Section -->
+        <div class="glass-panel rounded-3xl p-6 mb-6">
+            <h1 class="text-2xl font-bold text-center mb-6 tracking-wide text-white">Weather Forecasting</h1>
+            
+            <div class="relative flex gap-2">
+                <div class="relative w-full">
+                    <input type="text" id="city-input" 
+                        class="w-full bg-black/30 border border-white/10 rounded-full py-3 px-6 pr-12 text-white placeholder-gray-400 focus:outline-none focus:bg-black/50 transition shadow-inner"
+                        placeholder="Enter city..."
+                        onkeypress="handleKeyPress(event)">
+                    <button onclick="getWeatherByCity()" 
+                        class="absolute right-2 top-1.5 bg-white/10 hover:bg-white/20 p-1.5 rounded-full w-9 h-9 flex items-center justify-center transition text-white"
+                        title="Search City">
+                        <i class="fas fa-search text-sm"></i>
+                    </button>
+                </div>
+                <!-- GPS Button -->
+                <button onclick="getUserLocation()" 
+                    class="bg-white/10 hover:bg-white/20 border border-white/10 rounded-full w-12 h-12 flex-shrink-0 flex items-center justify-center transition text-white"
+                    title="Use My Location">
+                    <i class="fas fa-location-arrow text-lg"></i>
+                </button>
+            </div>
+            <p id="error-msg" class="text-red-400 text-sm mt-2 text-center hidden font-medium"></p>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loader" class="hidden flex justify-center my-8">
+            <div class="loader"></div>
+        </div>
+
+        <!-- Weather Display -->
+        <div id="weather-container" class="hidden transition-opacity duration-500 opacity-0">
+            
+            <!-- Main Current Weather Card -->
+            <div class="glass-panel rounded-3xl p-8 mb-6 text-center relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 opacity-10">
+                    <i class="fas fa-cloud text-9xl text-white"></i>
+                </div>
+                
+                <h2 id="city-name" class="text-3xl font-semibold mb-1 text-white">City Name</h2>
+                
+                <p class="text-gray-300 text-sm mb-6 font-medium">
+                    <span id="date-display">Monday, 1 Jan</span> 
+                    <span class="mx-2">•</span> 
+                    <span id="time-display" class="font-mono font-bold text-yellow-400">00:00:00 AM</span>
+                </p>
+                
+                <div class="flex flex-col items-center justify-center mb-6">
+                    <i id="weather-icon" class="fas fa-sun text-6xl mb-4 floating-icon text-yellow-400"></i>
+                    <div class="text-6xl font-bold mb-2 text-white">
+                        <span id="temp">0</span>°C
+                    </div>
+                    <p id="condition" class="text-xl capitalize font-medium text-gray-200">Clear Sky</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-white/10">
+                    <div class="flex flex-col items-center">
+                        <span class="text-gray-400 text-xs uppercase tracking-wider mb-1 font-semibold">Wind</span>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-wind text-gray-300"></i>
+                            <span class="font-semibold text-white"><span id="wind">0</span> km/h</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <span class="text-gray-400 text-xs uppercase tracking-wider mb-1 font-semibold">Humidity</span>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-tint text-gray-300"></i>
+                            <span class="font-semibold text-white"><span id="humidity">0</span>%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Humidity Chart Section -->
+            <div class="glass-panel rounded-3xl p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4 text-white">24h Humidity Trend</h3>
+                <div class="h-40 w-full">
+                    <canvas id="humidityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Forecast Section -->
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold mb-4 border-b border-white/10 pb-2 text-white">5-Day Forecast</h3>
+                <div id="forecast-grid" class="space-y-4">
+                    <!-- Forecast items will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let clockInterval;
+        let humidityChartInstance = null;
+
+        // Mapping WMO Weather Codes to Icons and Descriptions
+        const weatherCodes = {
+            0: { desc: "Clear sky", icon: "fa-sun", colorClass: "weather-sunny" },
+            1: { desc: "Mainly clear", icon: "fa-cloud-sun", colorClass: "weather-cloudy" },
+            2: { desc: "Partly cloudy", icon: "fa-cloud-sun", colorClass: "weather-cloudy" },
+            3: { desc: "Overcast", icon: "fa-cloud", colorClass: "weather-cloudy" },
+            45: { desc: "Fog", icon: "fa-smog", colorClass: "weather-cloudy" },
+            48: { desc: "Depositing rime fog", icon: "fa-smog", colorClass: "weather-cloudy" },
+            51: { desc: "Light drizzle", icon: "fa-cloud-rain", colorClass: "weather-rainy" },
+            53: { desc: "Moderate drizzle", icon: "fa-cloud-rain", colorClass: "weather-rainy" },
+            55: { desc: "Dense drizzle", icon: "fa-cloud-showers-heavy", colorClass: "weather-rainy" },
+            61: { desc: "Slight rain", icon: "fa-cloud-rain", colorClass: "weather-rainy" },
+            63: { desc: "Moderate rain", icon: "fa-cloud-showers-heavy", colorClass: "weather-rainy" },
+            65: { desc: "Heavy rain", icon: "fa-cloud-showers-heavy", colorClass: "weather-rainy" },
+            71: { desc: "Slight snow", icon: "fa-snowflake", colorClass: "weather-cloudy" },
+            73: { desc: "Moderate snow", icon: "fa-snowflake", colorClass: "weather-cloudy" },
+            75: { desc: "Heavy snow", icon: "fa-snowflake", colorClass: "weather-cloudy" },
+            80: { desc: "Slight rain showers", icon: "fa-cloud-rain", colorClass: "weather-rainy" },
+            81: { desc: "Moderate rain showers", icon: "fa-cloud-showers-heavy", colorClass: "weather-rainy" },
+            82: { desc: "Violent rain showers", icon: "fa-cloud-showers-water", colorClass: "weather-rainy" },
+            95: { desc: "Thunderstorm", icon: "fa-bolt", colorClass: "weather-rainy" },
+            96: { desc: "Thunderstorm with hail", icon: "fa-bolt", colorClass: "weather-rainy" },
+            99: { desc: "Heavy thunderstorm", icon: "fa-bolt", colorClass: "weather-rainy" }
+        };
+
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                getWeatherByCity();
+            }
+        }
+
+        function toggleLoader(show) {
+            const loader = document.getElementById('loader');
+            const weatherContainer = document.getElementById('weather-container');
+            const errorMsg = document.getElementById('error-msg');
+            
+            if (show) {
+                errorMsg.classList.add('hidden');
+                loader.classList.remove('hidden');
+                weatherContainer.classList.add('hidden');
+                weatherContainer.classList.remove('opacity-100');
+                weatherContainer.classList.add('opacity-0');
+            } else {
+                loader.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            const errorMsg = document.getElementById('error-msg');
+            const loader = document.getElementById('loader');
+            loader.classList.add('hidden');
+            errorMsg.textContent = message;
+            errorMsg.classList.remove('hidden');
+        }
+
+        // --- GPS Logic with IP Fallback ---
+        function getUserLocation() {
+            toggleLoader(true);
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        // Successfully got GPS
+                        getCityNameAndWeather(latitude, longitude);
+                    },
+                    (error) => {
+                        // GPS failed or denied, try IP fallback
+                        console.warn("GPS Access denied/failed. Attempting IP fallback.");
+                        getIpLocation();
+                    }
+                );
+            } else {
+                // Browser doesn't support GPS
+                getIpLocation();
+            }
+        }
+
+        async function getIpLocation() {
+            try {
+                // Attempt 1: ipwho.is (Primary)
+                const res = await fetch('https://ipwho.is/');
+                const data = await res.json();
+                
+                if (!data.success) throw new Error("Primary IP geo failed");
+                
+                fetchAndRenderWeather(data.latitude, data.longitude, data.city, data.country);
+            } catch (err) {
+                console.warn("Primary IP fallback failed, trying secondary provider...");
+                try {
+                    // Attempt 2: geojs.io (Secondary Backup)
+                    const res2 = await fetch('https://get.geojs.io/v1/ip/geo.json');
+                    const data2 = await res2.json();
+                    
+                    // geojs returns lat/lon as strings, so we parse them
+                    fetchAndRenderWeather(parseFloat(data2.latitude), parseFloat(data2.longitude), data2.city, data2.country);
+                } catch (err2) {
+                    // Both failed
+                    showError("Could not detect location. Please type your city name manually.");
+                }
+            }
+        }
+
+        // --- Main Weather Logic ---
+        async function getWeatherByCity() {
+            const cityInput = document.getElementById('city-input').value;
+            if (!cityInput) return;
+            
+            toggleLoader(true);
+
+            try {
+                // Geocoding
+                const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityInput)}&count=1&language=en&format=json`;
+                const geoRes = await fetch(geoUrl);
+                const geoData = await geoRes.json();
+
+                if (!geoData.results || geoData.results.length === 0) {
+                    throw new Error("City not found. Please check spelling.");
+                }
+
+                const { latitude, longitude, name, country } = geoData.results[0];
+                fetchAndRenderWeather(latitude, longitude, name, country);
+
+            } catch (err) {
+                showError(err.message || "An error occurred.");
+            }
+        }
+
+        // Reverse Geocode (Lat/Lon -> City Name) then get weather
+        async function getCityNameAndWeather(lat, lon) {
+            try {
+                // Using a free reverse geocoding API
+                const reverseGeoUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
+                const res = await fetch(reverseGeoUrl);
+                const data = await res.json();
+                
+                const city = data.city || data.locality || "Current Location";
+                const country = data.countryCode || "";
+                
+                fetchAndRenderWeather(lat, lon, city, country);
+            } catch (err) {
+                // Fallback if reverse geo fails
+                fetchAndRenderWeather(lat, lon, "Your Location", "");
+            }
+        }
+
+        async function fetchAndRenderWeather(latitude, longitude, cityName, countryName) {
+            if (clockInterval) clearInterval(clockInterval);
+
+            try {
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&hourly=relativehumidity_2m`;
+
+                const weatherRes = await fetch(weatherUrl);
+                const weatherData = await weatherRes.json();
+
+                updateUI(cityName, countryName, weatherData);
+            } catch (err) {
+                showError("Failed to fetch weather data.");
+            }
+        }
+
+        function updateUI(city, country, data) {
+            const weatherContainer = document.getElementById('weather-container');
+            const loader = document.getElementById('loader');
+            
+            // Current Weather Data
+            const current = data.current_weather;
+            const temp = Math.round(current.temperature);
+            const wind = current.windspeed;
+            const code = current.weathercode;
+            const timezone = data.timezone;
+            
+            const currentHourIndex = new Date().getHours();
+            const humidity = data.hourly.relativehumidity_2m[currentHourIndex] || '--';
+
+            const weatherInfo = weatherCodes[code] || weatherCodes[0];
+
+            // Update DOM Elements
+            const displayLocation = country ? `${city}, ${country}` : city;
+            document.getElementById('city-name').textContent = displayLocation;
+            
+            // --- TIME & DATE LOGIC ---
+            const startClock = () => {
+                const now = new Date();
+                try {
+                    const dateOptions = { timeZone: timezone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                    document.getElementById('date-display').textContent = now.toLocaleDateString('en-US', dateOptions);
+
+                    const timeOptions = { timeZone: timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+                    document.getElementById('time-display').textContent = now.toLocaleTimeString('en-US', timeOptions);
+                } catch (e) {
+                    document.getElementById('date-display').textContent = now.toLocaleDateString();
+                    document.getElementById('time-display').textContent = now.toLocaleTimeString();
+                }
+            };
+            startClock();
+            if (clockInterval) clearInterval(clockInterval);
+            clockInterval = setInterval(startClock, 1000);
+
+            document.getElementById('temp').textContent = temp;
+            document.getElementById('wind').textContent = wind;
+            document.getElementById('humidity').textContent = humidity;
+            document.getElementById('condition').textContent = weatherInfo.desc;
+            
+            const iconEl = document.getElementById('weather-icon');
+            iconEl.className = `fas ${weatherInfo.icon} text-6xl mb-4 floating-icon text-yellow-400`;
+            
+            document.getElementById('body-bg').className = `${weatherInfo.colorClass} min-h-screen text-white font-sans flex items-center justify-center p-4 transition-all duration-700`;
+
+            // --- RENDER HUMIDITY CHART ---
+            renderHumidityChart(data.hourly, currentHourIndex);
+
+            // --- 5-DAY FORECAST ---
+            const forecastContainer = document.getElementById('forecast-grid');
+            forecastContainer.innerHTML = ''; 
+
+            // Loop 1 to 5 for next 5 days
+            for (let i = 1; i <= 5; i++) {
+                const dateStr = data.daily.time[i];
+                if (!dateStr) break;
+
+                const maxTemp = Math.round(data.daily.temperature_2m_max[i]);
+                const minTemp = Math.round(data.daily.temperature_2m_min[i]);
+                const dailyCode = data.daily.weathercode[i];
+                const dailyInfo = weatherCodes[dailyCode] || weatherCodes[0];
+
+                const dateObj = new Date(dateStr);
+                const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between bg-black/30 rounded-xl p-3 border border-white/5 hover:bg-black/40 transition'; 
+                item.innerHTML = `
+                    <div class="flex items-center w-1/3">
+                        <span class="font-bold mr-3 text-white">${dayName}</span>
+                    </div>
+                    <div class="flex items-center justify-center w-1/3">
+                        <i class="fas ${dailyInfo.icon} text-xl text-white"></i>
+                    </div>
+                    <div class="flex items-center justify-end w-1/3 gap-3">
+                        <span class="font-bold text-white">${maxTemp}°</span>
+                        <span class="text-gray-400 text-sm font-medium">${minTemp}°</span>
+                    </div>
+                `;
+                forecastContainer.appendChild(item);
+            }
+
+            loader.classList.add('hidden');
+            weatherContainer.classList.remove('hidden');
+            
+            setTimeout(() => {
+                weatherContainer.classList.remove('opacity-0');
+                weatherContainer.classList.add('opacity-100');
+            }, 10);
+        }
+
+        function renderHumidityChart(hourlyData, startIndex) {
+            const ctx = document.getElementById('humidityChart').getContext('2d');
+            
+            // Take next 24 hours of data
+            const labels = [];
+            const humidityValues = [];
+            
+            let dataStartIndex = startIndex; 
+            
+            for (let i = 0; i < 24; i++) {
+                const index = dataStartIndex + i;
+                if (index >= hourlyData.time.length) break;
+                
+                const date = new Date(hourlyData.time[index]);
+                const hours = date.getHours().toString().padStart(2, '0');
+                labels.push(`${hours}:00`);
+                humidityValues.push(hourlyData.relativehumidity_2m[index]);
+            }
+
+            if (humidityChartInstance) {
+                humidityChartInstance.destroy();
+            }
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 160);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+            humidityChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Humidity (%)',
+                        data: humidityValues,
+                        borderColor: 'rgba(255, 255, 255, 0.9)',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(255, 255, 255, 1)',
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false, drawBorder: false },
+                            ticks: { color: 'rgba(255,255,255,0.6)', maxTicksLimit: 6 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.1)', drawBorder: false },
+                            ticks: { display: false },
+                            suggestedMin: 0,
+                            suggestedMax: 100
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
